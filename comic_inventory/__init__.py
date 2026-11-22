@@ -1,0 +1,1 @@
+"""Local comic inventory application."""
