@@ -5,11 +5,27 @@ const catalogNotice = document.querySelector("#catalog-notice");
 const showDeleted = document.querySelector("#show-deleted");
 const emptyState = document.querySelector("#empty-state");
 const count = document.querySelector("#comic-count");
+const resultsCount = document.querySelector("#results-count");
+const loadMoreButton = document.querySelector("#load-more");
+const summaryContainer = document.querySelector("#collection-summary");
+const pageSize = 24;
+let loadedCount = 0;
+let latestBrowseRequest = 0;
+let loadingMore = false;
+let searchTimer;
 
 const fieldNames = [
   "series_title", "issue_number", "publisher", "publication_year", "variant",
   "grade", "quantity", "upc", "creators", "condition_notes", "purchase_cost",
   "purchase_date", "purchase_source", "storage_location"
+];
+const filters = [
+  ["search", "search-filter"],
+  ["publisher", "publisher-filter"],
+  ["grade", "grade-filter"],
+  ["year", "year-filter"],
+  ["variant", "variant-filter"],
+  ["storage_location", "location-filter"]
 ];
 
 async function request(url, options = {}) {
@@ -148,7 +164,8 @@ function renderComic(comic) {
     if (!window.confirm(`Soft-delete ${comic.series_title} #${comic.issue_number}? You can restore it later.`)) return;
     try {
       await request(`/api/comics/${comic.id}`, { method: "DELETE" });
-      await loadComics();
+      await Promise.all([loadComics(), loadCollectionSummary()]);
+      await loadFacets();
     } catch (error) {
       notice(catalogNotice, error.message, true);
     }
@@ -156,7 +173,8 @@ function renderComic(comic) {
   card.querySelector('[data-action="restore"]')?.addEventListener("click", async () => {
     try {
       await request(`/api/comics/${comic.id}/restore`, { method: "POST" });
-      await loadComics();
+      await Promise.all([loadComics(), loadCollectionSummary()]);
+      await loadFacets();
     } catch (error) {
       notice(catalogNotice, error.message, true);
     }
@@ -175,18 +193,110 @@ function renderComic(comic) {
   return card;
 }
 
-async function loadComics() {
-  notice(catalogNotice, "");
+function fillSelect(id, values, placeholder) {
+  const select = document.querySelector(`#${id}`);
+  const currentValue = select.value;
+  select.replaceChildren(new Option(placeholder, ""));
+  for (const value of values) select.add(new Option(String(value), String(value)));
+  if (values.map(String).includes(currentValue)) select.value = currentValue;
+}
+
+async function loadFacets() {
   try {
-    const comics = await request(`/api/comics?include_deleted=${showDeleted.checked}`);
-    comicList.replaceChildren(...comics.map(renderComic));
-    count.textContent = `(${comics.length})`;
-    emptyState.classList.toggle("hidden", comics.length > 0);
-    if (comics.length === 0) {
-      emptyState.textContent = showDeleted.checked ? "No comics found." : "No comics yet. Add your first issue above.";
-    }
+    const facets = await request(`/api/comics/facets?include_deleted=${showDeleted.checked}`);
+    fillSelect("publisher-filter", facets.publishers, "All publishers");
+    fillSelect("grade-filter", facets.grades, "All grades");
+    fillSelect("year-filter", facets.years, "All years");
+    fillSelect("variant-filter", facets.variants, "All variants");
+    fillSelect("location-filter", facets.storage_locations, "All locations");
   } catch (error) {
     notice(catalogNotice, error.message, true);
+  }
+}
+
+async function loadCollectionSummary() {
+  try {
+    const summary = await request("/api/collection/summary");
+    const currency = new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" });
+    const values = [
+      ["Catalog entries", summary.comic_count.toLocaleString()],
+      ["Total copies", summary.total_copies.toLocaleString()],
+      ["Series", summary.series_count.toLocaleString()],
+      ["Publishers", summary.publisher_count.toLocaleString()],
+      ["Known purchase cost", currency.format(summary.known_purchase_cost)]
+    ];
+    summaryContainer.replaceChildren(...values.map(([label, value]) => {
+      const card = document.createElement("article");
+      const title = document.createElement("span");
+      const amount = document.createElement("strong");
+      card.className = "summary-card";
+      title.textContent = label;
+      amount.textContent = value;
+      card.append(title, amount);
+      return card;
+    }));
+  } catch (error) {
+    notice(catalogNotice, error.message, true);
+  }
+}
+
+function activeFilters() {
+  return filters.some(([key, id]) => key !== "search"
+    ? document.querySelector(`#${id}`).value
+    : document.querySelector(`#${id}`).value.trim());
+}
+
+async function loadComics({ append = false } = {}) {
+  if (append && loadingMore) return;
+  const requestId = ++latestBrowseRequest;
+  if (!append) {
+    loadedCount = 0;
+    loadingMore = false;
+  } else {
+    loadingMore = true;
+    loadMoreButton.disabled = true;
+    loadMoreButton.textContent = "Loading…";
+  }
+
+  const params = new URLSearchParams({
+    limit: String(pageSize),
+    offset: String(append ? loadedCount : 0),
+    sort_by: document.querySelector("#sort-by").value,
+    sort_order: document.querySelector("#sort-order").value,
+    include_deleted: String(showDeleted.checked)
+  });
+  for (const [key, id] of filters) {
+    const value = document.querySelector(`#${id}`).value.trim();
+    if (value) params.set(key, value);
+  }
+
+  notice(catalogNotice, "");
+  try {
+    const page = await request(`/api/comics?${params}`);
+    if (requestId !== latestBrowseRequest) return;
+    const cards = page.items.map(renderComic);
+    if (append) comicList.append(...cards);
+    else comicList.replaceChildren(...cards);
+    loadedCount = append ? loadedCount + cards.length : cards.length;
+    count.textContent = `(${page.total.toLocaleString()})`;
+    resultsCount.textContent = page.total === 0
+      ? ""
+      : `Showing ${loadedCount.toLocaleString()} of ${page.total.toLocaleString()} comics`;
+    emptyState.classList.toggle("hidden", page.total > 0);
+    if (page.total === 0) {
+      emptyState.textContent = activeFilters() || showDeleted.checked
+        ? "No comics match the current search and filters."
+        : "No comics yet. Add your first issue above.";
+    }
+    loadMoreButton.classList.toggle("hidden", !page.has_more);
+  } catch (error) {
+    if (requestId === latestBrowseRequest) notice(catalogNotice, error.message, true);
+  } finally {
+    if (requestId === latestBrowseRequest) {
+      loadingMore = false;
+      loadMoreButton.disabled = false;
+      loadMoreButton.textContent = "Load more comics";
+    }
   }
 }
 
@@ -228,13 +338,39 @@ form.addEventListener("submit", async (event) => {
     const savedComic = result.comic || result;
     await saveCover(savedComic.id);
     resetForm();
-    await loadComics();
+    await Promise.all([loadComics(), loadCollectionSummary()]);
+    await loadFacets();
     notice(formNotice, result.merged ? "Quantities merged into the matching comic." : "Comic saved.");
   } catch (error) {
     notice(formNotice, error.message, true);
   }
 });
 
+for (const [, id] of filters.slice(1)) {
+  document.querySelector(`#${id}`).addEventListener("change", () => loadComics());
+}
+document.querySelector("#sort-by").addEventListener("change", () => loadComics());
+document.querySelector("#sort-order").addEventListener("change", () => loadComics());
+document.querySelector("#search-filter").addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => loadComics(), 250);
+});
+showDeleted.addEventListener("change", () => {
+  loadFacets();
+  loadComics();
+});
+document.querySelector("#clear-filters").addEventListener("click", () => {
+  document.querySelector("#search-filter").value = "";
+  for (const [, id] of filters.slice(1)) document.querySelector(`#${id}`).value = "";
+  document.querySelector("#sort-by").value = "series_title";
+  document.querySelector("#sort-order").value = "asc";
+  showDeleted.checked = false;
+  loadFacets();
+  loadComics();
+});
+document.querySelector("#load-more").addEventListener("click", () => loadComics({ append: true }));
 document.querySelector("#cancel-edit").addEventListener("click", resetForm);
-showDeleted.addEventListener("change", loadComics);
+
+loadFacets();
 loadComics();
+loadCollectionSummary();

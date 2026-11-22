@@ -29,8 +29,40 @@ class ComicService:
         comic["movements"] = self.repository.list_movements(comic_id)
         return comic
 
-    def list_comics(self, include_deleted: bool = False) -> list[dict[str, Any]]:
-        return self.repository.list_comics(include_deleted=include_deleted)
+    def browse_comics(
+        self,
+        *,
+        search: str | None,
+        publisher: str | None,
+        grade: str | None,
+        year: int | None,
+        variant: str | None,
+        storage_location: str | None,
+        sort_by: str,
+        sort_order: str,
+        limit: int,
+        offset: int,
+        include_deleted: bool = False,
+    ) -> dict[str, Any]:
+        return self.repository.browse_comics(
+            search=search,
+            publisher=publisher,
+            grade=grade,
+            year=year,
+            variant=variant,
+            storage_location=storage_location,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            limit=limit,
+            offset=offset,
+            include_deleted=include_deleted,
+        )
+
+    def list_facets(self, include_deleted: bool = False) -> dict[str, list[Any]]:
+        return self.repository.list_facets(include_deleted=include_deleted)
+
+    def get_collection_summary(self) -> dict[str, int | float]:
+        return self.repository.get_collection_summary()
 
     def update_comic(
         self, comic_id: int, updates: dict[str, Any], quantity_note: str | None = None

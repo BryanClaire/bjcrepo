@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sqlite3
 from datetime import datetime, timezone
 from typing import Any
@@ -27,6 +28,20 @@ COMIC_FIELDS = (
 REQUIRED_FIELDS = ("series_title", "issue_number", "publisher", "grade")
 
 
+def natural_key(value: str) -> tuple[tuple[int, int | str], ...]:
+    return tuple(
+        (0, int(part)) if part.isdigit() else (1, part.casefold())
+        for part in re.split(r"(\d+)", value)
+        if part
+    )
+
+
+def natural_compare(left: str, right: str) -> int:
+    left_key = natural_key(left)
+    right_key = natural_key(right)
+    return (left_key > right_key) - (left_key < right_key)
+
+
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -39,16 +54,145 @@ class ComicRepository:
     def __init__(self, database: Database):
         self.database = database
 
-    def list_comics(self, include_deleted: bool = False) -> list[dict[str, Any]]:
+    def browse_comics(
+        self,
+        *,
+        search: str | None,
+        publisher: str | None,
+        grade: str | None,
+        year: int | None,
+        variant: str | None,
+        storage_location: str | None,
+        sort_by: str,
+        sort_order: str,
+        limit: int,
+        offset: int,
+        include_deleted: bool = False,
+    ) -> dict[str, Any]:
+        conditions: list[str] = []
+        parameters: list[Any] = []
+        if not include_deleted:
+            conditions.append("deleted_at IS NULL")
+        if search and search.strip():
+            searchable_fields = (
+                "series_title",
+                "issue_number",
+                "publisher",
+                "variant",
+                "grade",
+                "upc",
+                "creators",
+                "storage_location",
+            )
+            terms = " OR ".join(
+                f"instr(lower(coalesce({field}, '')), lower(?)) > 0"
+                for field in searchable_fields
+            )
+            conditions.append(f"({terms})")
+            parameters.extend([search.strip()] * len(searchable_fields))
+        for column, value in (
+            ("publisher", publisher),
+            ("grade", grade),
+            ("variant", variant),
+            ("storage_location", storage_location),
+        ):
+            if value and value.strip():
+                conditions.append(f"lower(trim({column})) = lower(trim(?))")
+                parameters.append(value.strip())
+        if year is not None:
+            conditions.append("publication_year = ?")
+            parameters.append(year)
+
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        sort_columns = {
+            "series_title": "series_title COLLATE NOCASE",
+            "issue_number": "issue_number COLLATE COMIC_NATURAL",
+            "publisher": "publisher COLLATE NOCASE",
+            "publication_year": "publication_year",
+            "grade": "grade COLLATE NOCASE",
+            "quantity": "quantity",
+        }
+        direction = "DESC" if sort_order == "desc" else "ASC"
+        sort_expression = sort_columns[sort_by]
+        nulls = " NULLS LAST" if sort_by == "publication_year" else ""
+        order_by = [f"{sort_expression} {direction}{nulls}"]
+        if sort_by != "series_title":
+            order_by.append("series_title COLLATE NOCASE ASC")
+        if sort_by != "issue_number":
+            order_by.append("issue_number COLLATE COMIC_NATURAL ASC")
+        order_by.append("id ASC")
+
         with self.database.connection() as connection:
-            where = "" if include_deleted else "WHERE deleted_at IS NULL"
+            connection.create_collation("COMIC_NATURAL", natural_compare)
+            total = connection.execute(
+                f"SELECT COUNT(*) FROM comics {where}", parameters
+            ).fetchone()[0]
             rows = connection.execute(
                 f"""
                 SELECT * FROM comics {where}
-                ORDER BY series_title COLLATE NOCASE, issue_number, id
+                ORDER BY {", ".join(order_by)}
+                LIMIT ? OFFSET ?
+                """,
+                (*parameters, limit, offset),
+            ).fetchall()
+            items = [dict(row) for row in rows]
+            return {
+                "items": items,
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+                "has_more": offset + len(items) < total,
+            }
+
+    def list_facets(self, include_deleted: bool = False) -> dict[str, list[Any]]:
+        with self.database.connection() as connection:
+            deleted_clause = "" if include_deleted else "AND deleted_at IS NULL"
+
+            def text_values(column: str) -> list[str]:
+                rows = connection.execute(
+                    f"""
+                    SELECT DISTINCT trim({column}) AS value
+                    FROM comics
+                    WHERE trim(coalesce({column}, '')) <> '' {deleted_clause}
+                    ORDER BY value COLLATE NOCASE
+                    """
+                ).fetchall()
+                return [row["value"] for row in rows]
+
+            years = connection.execute(
+                f"""
+                SELECT DISTINCT publication_year AS value
+                FROM comics
+                WHERE publication_year IS NOT NULL {deleted_clause}
+                ORDER BY value DESC
                 """
             ).fetchall()
-            return [dict(row) for row in rows]
+            return {
+                "publishers": text_values("publisher"),
+                "grades": text_values("grade"),
+                "variants": text_values("variant"),
+                "storage_locations": text_values("storage_location"),
+                "years": [row["value"] for row in years],
+            }
+
+    def get_collection_summary(self) -> dict[str, int | float]:
+        with self.database.connection() as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    COUNT(*) AS comic_count,
+                    COALESCE(SUM(quantity), 0) AS total_copies,
+                    COUNT(DISTINCT lower(trim(series_title))) AS series_count,
+                    COUNT(DISTINCT lower(trim(publisher))) AS publisher_count,
+                    COALESCE(SUM(CASE
+                        WHEN purchase_cost IS NULL THEN 0
+                        ELSE purchase_cost * quantity
+                    END), 0) AS known_purchase_cost
+                FROM comics
+                WHERE deleted_at IS NULL
+                """
+            ).fetchone()
+            return dict(row)
 
     def get_comic(self, comic_id: int) -> dict[str, Any]:
         with self.database.connection() as connection:

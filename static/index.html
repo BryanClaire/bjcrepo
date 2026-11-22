@@ -54,17 +54,69 @@
         <p class="notice hidden" id="form-notice" role="status"></p>
       </section>
 
+      <section class="summary-section" aria-labelledby="summary-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">COLLECTION SNAPSHOT</p>
+            <h2 id="summary-title">At a glance</h2>
+          </div>
+        </div>
+        <div id="collection-summary" class="summary-grid" aria-live="polite">
+          <article class="summary-card"><span>Catalog entries</span><strong>—</strong></article>
+          <article class="summary-card"><span>Total copies</span><strong>—</strong></article>
+          <article class="summary-card"><span>Series</span><strong>—</strong></article>
+          <article class="summary-card"><span>Publishers</span><strong>—</strong></article>
+          <article class="summary-card"><span>Known purchase cost</span><strong>—</strong></article>
+        </div>
+        <p class="summary-note">Known cost is the recorded per-copy purchase cost multiplied by quantity; entries without a cost are excluded.</p>
+      </section>
+
       <section class="catalog-section" aria-labelledby="catalog-title">
         <div class="section-heading catalog-heading">
           <div>
             <p class="eyebrow">YOUR LIBRARY</p>
             <h2 id="catalog-title">Catalog <span id="comic-count" class="count"></span></h2>
           </div>
-          <label class="toggle-label"><input id="show-deleted" type="checkbox"> Show deleted</label>
         </div>
+        <div class="panel filters-panel">
+          <div class="filter-grid">
+            <label class="search-filter">Search collection
+              <input id="search-filter" type="search" placeholder="Series, issue, creator, UPC…" autocomplete="off">
+            </label>
+            <label>Publisher <select id="publisher-filter"><option value="">All publishers</option></select></label>
+            <label>Grade <select id="grade-filter"><option value="">All grades</option></select></label>
+            <label>Year <select id="year-filter"><option value="">All years</option></select></label>
+            <label>Variant <select id="variant-filter"><option value="">All variants</option></select></label>
+            <label>Storage location <select id="location-filter"><option value="">All locations</option></select></label>
+            <label>Sort by
+              <select id="sort-by">
+                <option value="series_title">Series title</option>
+                <option value="issue_number">Issue number</option>
+                <option value="publisher">Publisher</option>
+                <option value="publication_year">Publication year</option>
+                <option value="grade">Grade</option>
+                <option value="quantity">Quantity</option>
+              </select>
+            </label>
+            <label>Direction
+              <select id="sort-order">
+                <option value="asc">Ascending</option>
+                <option value="desc">Descending</option>
+              </select>
+            </label>
+          </div>
+          <div class="filter-actions">
+            <label class="toggle-label"><input id="show-deleted" type="checkbox"> Include deleted</label>
+            <button type="button" class="button button-muted button-small" id="clear-filters">Clear filters</button>
+          </div>
+        </div>
+        <p class="results-count" id="results-count" aria-live="polite"></p>
         <p class="notice hidden" id="catalog-notice" role="status"></p>
         <div id="comic-list" class="comic-list" aria-live="polite"></div>
         <p id="empty-state" class="empty-state hidden">No comics yet. Add your first issue above.</p>
+        <div class="pagination-actions">
+          <button type="button" class="button button-muted hidden" id="load-more">Load more comics</button>
+        </div>
       </section>
     </main>
     <footer>Comic Inventory · A private, local-first collection tracker</footer>

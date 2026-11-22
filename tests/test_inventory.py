@@ -46,7 +46,7 @@ def add_comic(client, **overrides):
 def test_create_read_and_update_comic(client):
     created = add_comic(client)
 
-    listed = client.get("/api/comics").json()
+    listed = client.get("/api/comics").json()["items"]
     assert len(listed) == 1
     assert listed[0]["id"] == created["id"]
 
@@ -82,7 +82,7 @@ def test_duplicate_warning_continue_and_merge(client):
     assert merged.status_code == 200
     assert merged.json()["merged"] is True
     assert merged.json()["comic"]["quantity"] == 5
-    assert len(client.get("/api/comics").json()) == 1
+    assert len(client.get("/api/comics").json()["items"]) == 1
     merge_movement = client.get(f"/api/comics/{first['id']}").json()["movements"][-1]
     assert merge_movement["notes"] == "Merged duplicate inventory entry"
 
@@ -91,7 +91,7 @@ def test_duplicate_warning_continue_and_merge(client):
     )
     assert separate.status_code == 201
     assert separate.json()["merged"] is False
-    assert len(client.get("/api/comics").json()) == 2
+    assert len(client.get("/api/comics").json()["items"]) == 2
 
 
 def test_negative_quantity_is_rejected(client):
@@ -137,13 +137,13 @@ def test_soft_delete_restoration_and_movement_history(client):
     deleted = client.delete(f"/api/comics/{comic['id']}")
     assert deleted.status_code == 200
     assert deleted.json()["deleted_at"] is not None
-    assert client.get("/api/comics").json() == []
-    assert len(client.get("/api/comics?include_deleted=true").json()) == 1
+    assert client.get("/api/comics").json()["items"] == []
+    assert len(client.get("/api/comics?include_deleted=true").json()["items"]) == 1
 
     restored = client.post(f"/api/comics/{comic['id']}/restore")
     assert restored.status_code == 200
     assert restored.json()["deleted_at"] is None
-    assert len(client.get("/api/comics").json()) == 1
+    assert len(client.get("/api/comics").json()["items"]) == 1
     movements = client.get(f"/api/comics/{comic['id']}").json()["movements"]
     assert [movement["movement_type"] for movement in movements] == [
         "initial_entry",

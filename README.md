@@ -40,6 +40,11 @@ python -m pytest
   restoration movements.
 - Soft-delete comics and restore them later.
 - Upload optional JPEG, PNG, or WebP cover images (up to 10 MB).
+- Search catalog metadata, combine publisher/grade/year/variant/location
+  filters, sort naturally by issue number, and load results progressively.
+- View collection entry, copy, series, publisher, and known purchase-cost
+  totals. Known cost multiplies recorded per-copy cost by quantity and excludes
+  entries without a recorded cost.
 
 Sales, wish lists, market pricing, barcode scanning, cloud deployment,
 authentication, and AI features are intentionally out of scope.

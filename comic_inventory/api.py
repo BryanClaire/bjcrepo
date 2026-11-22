@@ -107,8 +107,49 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
         return FileResponse(ROOT_DIR / "static" / "index.html")
 
     @app.get("/api/comics")
-    def list_comics(include_deleted: bool = Query(default=False)) -> list[dict[str, Any]]:
-        return service.list_comics(include_deleted=include_deleted)
+    def list_comics(
+        search: str | None = Query(default=None, max_length=200),
+        publisher: str | None = Query(default=None, max_length=120),
+        grade: str | None = Query(default=None, max_length=80),
+        year: int | None = Query(default=None, ge=1, le=9999),
+        variant: str | None = Query(default=None, max_length=200),
+        storage_location: str | None = Query(default=None, max_length=200),
+        sort_by: Literal[
+            "series_title",
+            "issue_number",
+            "publisher",
+            "publication_year",
+            "grade",
+            "quantity",
+        ] = Query(default="series_title"),
+        sort_order: Literal["asc", "desc"] = Query(default="asc"),
+        limit: int = Query(default=24, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+        include_deleted: bool = Query(default=False),
+    ) -> dict[str, Any]:
+        return service.browse_comics(
+            search=search,
+            publisher=publisher,
+            grade=grade,
+            year=year,
+            variant=variant,
+            storage_location=storage_location,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            limit=limit,
+            offset=offset,
+            include_deleted=include_deleted,
+        )
+
+    @app.get("/api/comics/facets")
+    def list_comic_facets(
+        include_deleted: bool = Query(default=False),
+    ) -> dict[str, list[Any]]:
+        return service.list_facets(include_deleted=include_deleted)
+
+    @app.get("/api/collection/summary")
+    def get_collection_summary() -> dict[str, int | float]:
+        return service.get_collection_summary()
 
     @app.post("/api/comics")
     def create_comic(
