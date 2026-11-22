@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#17263d">
+    <title>Comic Inventory</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-content">
+        <div>
+          <p class="eyebrow">YOUR COLLECTION, ORGANIZED</p>
+          <h1>Comic Inventory</h1>
+        </div>
+        <span class="local-badge">Stored locally</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="panel form-panel" aria-labelledby="form-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">COLLECTION MANAGEMENT</p>
+            <h2 id="form-title">Add a comic</h2>
+          </div>
+          <button type="button" class="button button-muted hidden" id="cancel-edit">Cancel edit</button>
+        </div>
+        <form id="comic-form">
+          <div class="form-grid">
+            <label>Series title <input name="series_title" required maxlength="200"></label>
+            <label>Issue number <input name="issue_number" required maxlength="40" placeholder="e.g. 1 or 1A"></label>
+            <label>Publisher <input name="publisher" required maxlength="120"></label>
+            <label>Publication year <input name="publication_year" type="number" min="1" max="9999"></label>
+            <label>Variant <input name="variant" maxlength="200"></label>
+            <label>Grade <input name="grade" required maxlength="80" placeholder="e.g. 9.8 or Raw"></label>
+            <label>Quantity <input name="quantity" type="number" min="0" step="1" value="1" required></label>
+            <label>UPC <input name="upc" maxlength="80"></label>
+            <label>Creator names <input name="creators" maxlength="1000" placeholder="Separate names with commas"></label>
+            <label>Purchase cost <input name="purchase_cost" type="number" min="0" step="0.01"></label>
+            <label>Purchase date <input name="purchase_date" type="date"></label>
+            <label>Purchase source <input name="purchase_source" maxlength="200"></label>
+            <label>Storage location <input name="storage_location" maxlength="200"></label>
+            <label class="wide">Condition notes <textarea name="condition_notes" maxlength="2000" rows="2"></textarea></label>
+            <label class="wide">Quantity change note <input name="quantity_note" maxlength="500" placeholder="Optional reason for this inventory adjustment"></label>
+            <label class="wide">Cover image <input name="cover_image" type="file" accept="image/jpeg,image/png,image/webp"></label>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="button button-primary" id="submit-button">Add comic</button>
+            <span class="form-hint">A duplicate check runs before a new entry is saved.</span>
+          </div>
+        </form>
+        <p class="notice hidden" id="form-notice" role="status"></p>
+      </section>
+
+      <section class="catalog-section" aria-labelledby="catalog-title">
+        <div class="section-heading catalog-heading">
+          <div>
+            <p class="eyebrow">YOUR LIBRARY</p>
+            <h2 id="catalog-title">Catalog <span id="comic-count" class="count"></span></h2>
+          </div>
+          <label class="toggle-label"><input id="show-deleted" type="checkbox"> Show deleted</label>
+        </div>
+        <p class="notice hidden" id="catalog-notice" role="status"></p>
+        <div id="comic-list" class="comic-list" aria-live="polite"></div>
+        <p id="empty-state" class="empty-state hidden">No comics yet. Add your first issue above.</p>
+      </section>
+    </main>
+    <footer>Comic Inventory · A private, local-first collection tracker</footer>
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>
